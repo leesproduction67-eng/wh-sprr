@@ -8,31 +8,17 @@ import {
   RotateCcw,
   Copy,
   Check,
-  Code,
-  GraduationCap,
-  Lightbulb,
-  Shield,
-  QrCode,
-  Lock,
-  VolumeX,
-  Trash2,
-  Video,
-  Bot,
-  Heart,
-  HelpCircle,
 } from 'lucide-react';
 import { UserAccount } from '../types';
 import { ApiService } from '../services/apiService';
 
 export const WHISPY_DEFAULT_MESSAGE = `Hey! I’m Whispy.
 
-Welcome to Whisprr! I’m your little AI sidekick, here whenever you need me. 💬
+Welcome to Whisprr! I’m your AI sidekick, powered by ChatGPT mini 4.0 (gpt-4o-mini). 💬🐾
 
-Ask me anything — questions, ideas, homework, coding, random thoughts, advice, or just something you’re curious about. I’ll do my best to help you figure it out.
+Ask me any question you want — coding, homework, math, writing, brainstorming, ideas, advice, or anything you're curious about.
 
-No complicated stuff. Just type what’s on your mind and let’s get started. 
-
-What can I help you with?`;
+Type what’s on your mind below and let’s get started!`;
 
 interface WhispyMessage {
   id: string;
@@ -46,39 +32,6 @@ interface WhispyModalProps {
   onClose: () => void;
   currentUser: UserAccount;
 }
-
-const QUICK_PROMPTS = [
-  {
-    icon: Code,
-    label: 'Coding & Debugging',
-    query: 'Can you help me write or debug a code snippet?',
-  },
-  {
-    icon: GraduationCap,
-    label: 'Homework & Explanations',
-    query: 'Can you explain a complex concept simply or help me with homework?',
-  },
-  {
-    icon: Lightbulb,
-    label: 'Ideas & Advice',
-    query: 'Give me 3 creative ideas or write a creative story for me!',
-  },
-  {
-    icon: Shield,
-    label: 'View-Once Photos',
-    query: 'How does View-Once anti-screenshot photo protection work in Whisprr?',
-  },
-  {
-    icon: QrCode,
-    label: 'Connect via QR Code',
-    query: 'How do I connect with friends and scan QR codes in Whisprr?',
-  },
-  {
-    icon: Lock,
-    label: 'Passcode & Auto-Lock',
-    query: 'How do I set up the 4-digit Passcode and Auto-Lock on Whisprr?',
-  },
-];
 
 export const WhispyModal: React.FC<WhispyModalProps> = ({
   isOpen,
@@ -159,18 +112,17 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
       timestamp: Date.now(),
     };
 
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
+    // Keep prior conversation history for context (excluding the new user turn)
+    const historyPayload = messages.slice(-8).map((m) => ({
+      role: m.role,
+      text: m.text,
+    }));
+
+    setMessages((prev) => [...prev, userMsg]);
     setInputMessage('');
     setIsLoading(true);
 
     try {
-      // Format history for API (last 10 turns)
-      const historyPayload = updatedMessages.slice(-10).map((m) => ({
-        role: m.role,
-        text: m.text,
-      }));
-
       const reply = await ApiService.askWhispy(textToSend, historyPayload);
 
       const whispyMsg: WhispyMessage = {
@@ -185,7 +137,7 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
       const errorMsg: WhispyMessage = {
         id: `whispy_err_${Date.now()}`,
         role: 'whispy',
-        text: "My fuzzy ears couldn't connect right now! 🐾 Please check your internet connection or try asking again in a moment.",
+        text: "I couldn't reach the AI network right now! 🐾 Please check your internet connection or try asking again in a moment.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -254,13 +206,15 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
                   </h3>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/30">
-                    ChatGPT mini
+                    ChatGPT mini 4.0
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                  <span>Whisprr AI Assistant</span>
+                  <span>Whisprr AI</span>
                   <span>•</span>
-                  <span className="text-emerald-400 font-medium">Always Online</span>
+                  <span className="text-emerald-400 font-medium">ChatGPT 4o mini</span>
+                  <span>•</span>
+                  <span className="text-slate-400 font-medium">Online</span>
                 </p>
               </div>
             </div>
@@ -292,40 +246,21 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-cyan-500/5 border border-pink-500/20 text-center relative overflow-hidden"
+                className="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-cyan-500/5 border border-pink-500/20 text-center relative overflow-hidden"
               >
-                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-pink-500/40 mx-auto mb-2.5 shadow-xl shadow-pink-500/20">
+                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-pink-500/40 mx-auto mb-3 shadow-xl shadow-pink-500/20">
                   <img
                     src="/whispy.jpg"
                     alt="Whispy"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <h4 className="text-sm font-bold text-white mb-1">
+                <h4 className="text-sm font-bold text-white mb-1.5">
                   Ask Whispy Anything! 🐾
                 </h4>
-                <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
-                  I’m your little AI sidekick. Ask me about coding, homework, random thoughts, ideas, or Whisprr!
+                <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
+                  I can answer any question you need — coding, homework, math, writing, brainstorming, advice, or general questions. Type your question below!
                 </p>
-
-                {/* Quick Prompts Bento */}
-                <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-left">
-                  {QUICK_PROMPTS.map((prompt, idx) => {
-                    const Icon = prompt.icon;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleSend(prompt.query)}
-                        className="p-2 rounded-xl bg-black/40 hover:bg-pink-500/15 border border-white/5 hover:border-pink-500/30 transition-all text-[11px] text-slate-300 hover:text-white flex items-center gap-2 cursor-pointer group"
-                      >
-                        <div className="p-1 rounded-lg bg-white/5 group-hover:bg-pink-500/20 text-pink-400 transition-colors">
-                          <Icon className="w-3.5 h-3.5" />
-                        </div>
-                        <span className="truncate">{prompt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
               </motion.div>
             )}
 
@@ -420,23 +355,6 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick suggestions pills strip above input */}
-          <div className="px-3 py-1.5 bg-[#0b0e17] border-t border-white/5 overflow-x-auto flex items-center gap-1.5 no-scrollbar shrink-0">
-            <span className="text-[10px] text-slate-500 font-medium px-1 flex items-center gap-1 shrink-0">
-              <Sparkles className="w-3 h-3 text-pink-400" />
-              <span>Ask:</span>
-            </span>
-            {QUICK_PROMPTS.slice(0, 4).map((prompt, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSend(prompt.query)}
-                className="px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-pink-500/15 border border-white/5 hover:border-pink-500/30 text-[11px] text-slate-300 hover:text-pink-300 whitespace-nowrap transition-all cursor-pointer shrink-0"
-              >
-                {prompt.label}
-              </button>
-            ))}
-          </div>
-
           {/* Bottom Chat Input Form */}
           <footer className="p-3 bg-[#0f1320] border-t border-white/10 shrink-0">
             <form
@@ -452,7 +370,7 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Ask anything — coding, homework, ideas, or Whisprr..."
+                  placeholder="Ask Whispy any question..."
                   disabled={isLoading}
                   className="w-full bg-white/[0.05] border border-white/10 rounded-2xl py-2.5 pl-4 pr-10 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-pink-500/50 disabled:opacity-50"
                 />

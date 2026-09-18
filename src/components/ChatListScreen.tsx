@@ -284,9 +284,25 @@ export const ChatListScreen: React.FC<ChatListScreenProps> = ({
         ) : (
           filteredConversations.map((conv) => {
             const isGroup = conv.isGroup;
-            const participants = conv.participantIds || conv.participants || [];
+            const rawParts = ((conv.participantIds || conv.participants || []) as string[]).filter(Boolean);
+            const extractedFromId = conv.id.startsWith('conv_')
+              ? conv.id.replace(/^conv_/, '').split('_').filter(Boolean)
+              : [];
+            const allCandidateParts = Array.from(new Set([...rawParts, ...extractedFromId]));
+            const participants = allCandidateParts.map((p) => (p || '').replace(/^whisprr_/, '').trim()).filter(Boolean);
+
+            const myCleanId = (currentUser.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+            const myCleanAcc = (currentUser.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+
             const recipientFriend = !isGroup
-              ? friends.find((f) => participants.includes(f.id) || participants.includes(f.accountId || ''))
+              ? friends.find((f) => {
+                  const fid = (f.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+                  const facc = (f.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+                  return participants.some((p) => {
+                    const cp = p.toLowerCase();
+                    return cp === fid || cp === facc;
+                  });
+                }) || friends.find((f) => f.displayName === conv.name)
               : null;
 
             const displayName = isGroup
@@ -362,9 +378,13 @@ export const ChatListScreen: React.FC<ChatListScreenProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const targetPeer = participants.find(
-                        (p) => p.toLowerCase() !== myId.toLowerCase()
-                      );
+                      const targetPeer =
+                        participants.find((p) => {
+                          const cp = p.toLowerCase();
+                          return cp !== myCleanId && cp !== myCleanAcc;
+                        }) ||
+                        recipientFriend?.id ||
+                        recipientFriend?.accountId;
                       if (targetPeer) {
                         onStartVideoCall(targetPeer, displayName);
                       }

@@ -462,10 +462,11 @@ export default function App() {
       }
 
       case 'CALL_INVITE': {
-        const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '');
-        const currentClean = currentUser.id.toLowerCase().replace(/^whisprr_/, '');
+        const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        const currentCleanId = (currentUser.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        const currentCleanAcc = (currentUser.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
 
-        if (cleanRecipient === currentClean) {
+        if (cleanRecipient === currentCleanId || (currentCleanAcc && cleanRecipient === currentCleanAcc)) {
           SoundEffects.stopRing();
           SoundEffects.playRing();
           const callerName = msg.senderName || msg.senderId;
@@ -483,7 +484,7 @@ export default function App() {
             callStatus: 'ringing',
           });
 
-          // Also trigger instant banner toast with action buttons in case user is inside a sub-screen
+          // In-app Notification Banner Toast with quick actions
           setInAppNotification({
             id: `call_${Date.now()}_${msg.senderId}`,
             type: 'call',
@@ -494,16 +495,37 @@ export default function App() {
             isVideoCall: msg.payload?.isVideo ?? true,
             timestamp: Date.now(),
           });
+
+          // Show browser desktop notification on laptop
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              const notif = new Notification(`📞 Incoming Call from ${callerName}`, {
+                body: 'Incoming HD Video Call - Click to answer on Whisprr',
+                icon: msg.senderAvatar || '/icons/icon.svg',
+                tag: 'incoming-call',
+                requireInteraction: true,
+              });
+              notif.onclick = () => {
+                window.focus();
+                notif.close();
+              };
+            } catch {}
+          }
         }
         break;
       }
 
       case 'CALL_ACCEPT': {
-        const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '');
-        const currentClean = currentUser.id.toLowerCase().replace(/^whisprr_/, '');
+        const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        const currentCleanId = (currentUser.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        const currentCleanAcc = (currentUser.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
         const currentCall = callStateRef.current;
 
-        if (cleanRecipient === currentClean || (currentCall.isActive && !currentCall.isIncoming)) {
+        if (
+          cleanRecipient === currentCleanId ||
+          (currentCleanAcc && cleanRecipient === currentCleanAcc) ||
+          (currentCall.isActive && !currentCall.isIncoming)
+        ) {
           SoundEffects.stopRing();
           SoundEffects.playCallConnected();
           setCallState((prev) => ({
@@ -808,20 +830,11 @@ export default function App() {
   const startVideoCall = async (targetPeerId: string, targetName: string) => {
     if (!currentUser) return;
 
-    const cleanTargetId = targetPeerId.replace(/^whisprr_/, '');
+    const cleanTargetId = (targetPeerId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+    if (!cleanTargetId) return;
 
     SoundEffects.stopRing();
     SoundEffects.playRing();
-
-    let stream: MediaStream;
-    try {
-      stream = await getHighQualityMediaStream(true);
-    } catch (err) {
-      console.warn('Camera/Microphone physical device fallback:', err);
-      stream = createSimulatedVideoStream(currentUser.displayName, currentUser.avatarUrl);
-    }
-
-    setLocalStream(stream);
 
     setCallState({
       isActive: true,
@@ -836,6 +849,27 @@ export default function App() {
       isVideoEnabled: true,
       callStatus: 'calling',
     });
+
+    // Send FAST immediate signal alert so laptop starts ringing instantly!
+    peerService.broadcastMessage({
+      type: 'CALL_INVITE',
+      senderId: currentUser.id,
+      senderName: currentUser.displayName,
+      senderAvatar: currentUser.avatarUrl,
+      recipientId: cleanTargetId,
+      payload: { isVideo: true, earlyAlert: true },
+      timestamp: Date.now(),
+    });
+
+    let stream: MediaStream;
+    try {
+      stream = await getHighQualityMediaStream(true);
+    } catch (err) {
+      console.warn('Camera/Microphone physical device fallback:', err);
+      stream = createSimulatedVideoStream(currentUser.displayName, currentUser.avatarUrl);
+    }
+
+    setLocalStream(stream);
 
     // 1. Native WebRTC Call with HD tracks and SDP offer sent via CALL_INVITE
     try {

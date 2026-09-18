@@ -101,11 +101,35 @@ class RealtimePeerService {
     }
 
     // Automatically handle WebRTC signaling messages
-    if (msg.type === 'WEBRTC_OFFER' || msg.type === 'WEBRTC_ANSWER' || msg.type === 'WEBRTC_ICE') {
+    if (
+      msg.type === 'CALL_INVITE' ||
+      msg.type === 'CALL_ACCEPT' ||
+      msg.type === 'CALL_REJECT' ||
+      msg.type === 'CALL_END' ||
+      msg.type === 'WEBRTC_OFFER' ||
+      msg.type === 'WEBRTC_ANSWER' ||
+      msg.type === 'WEBRTC_ICE'
+    ) {
       this.handleWebRTCSignal(msg);
     }
 
     this.notifyMessageListeners(msg);
+  }
+
+  // Trigger immediate delta sync (useful when waking from background or window focus)
+  public async triggerImmediateSync() {
+    if (!this.currentUserId) return;
+    const cleanUser = this.currentUserId.toLowerCase().replace(/^whisprr_/, '').trim();
+    try {
+      const res = await fetch(`/api/sync?userId=${encodeURIComponent(cleanUser)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.signals && Array.isArray(data.signals)) {
+        data.signals.forEach((sig: RealtimeMessage) => {
+          this.handleIncomingSignal(sig);
+        });
+      }
+    } catch {}
   }
 
   private initSSE(userId: string) {
@@ -116,7 +140,7 @@ class RealtimePeerService {
       this.eventSource = null;
     }
 
-    const cleanUser = userId.toLowerCase().replace(/^whisprr_/, '');
+    const cleanUser = userId.toLowerCase().replace(/^whisprr_/, '').trim();
     const sseUrl = `/api/signal/stream?userId=${encodeURIComponent(cleanUser)}`;
 
     try {
@@ -142,7 +166,7 @@ class RealtimePeerService {
           if (this.currentUserId) {
             this.initSSE(this.currentUserId);
           }
-        }, 2500);
+        }, 1500);
       };
     } catch (e) {
       console.warn('SSE connection failed:', e);
@@ -152,7 +176,10 @@ class RealtimePeerService {
   // Delta polling safety net to guarantee message & call delivery even under network disruption
   private startPeriodicSync(userId: string) {
     clearInterval(this.syncInterval);
-    const cleanUser = userId.toLowerCase().replace(/^whisprr_/, '');
+    const cleanUser = userId.toLowerCase().replace(/^whisprr_/, '').trim();
+
+    // Fast initial sync
+    this.triggerImmediateSync();
 
     this.syncInterval = setInterval(async () => {
       try {
@@ -165,7 +192,25 @@ class RealtimePeerService {
           });
         }
       } catch {}
-    }, 2500);
+    }, 1500);
+
+    // Setup window focus and tab visibility listeners for instant laptop response
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const onWakeOrFocus = () => {
+        this.triggerImmediateSync();
+        if (!this.eventSource || this.eventSource.readyState === EventSource.CLOSED) {
+          this.initSSE(cleanUser);
+        }
+      };
+      window.removeEventListener('focus', onWakeOrFocus);
+      window.addEventListener('focus', onWakeOrFocus);
+      document.removeEventListener('visibilitychange', onWakeOrFocus);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          onWakeOrFocus();
+        }
+      });
+    }
   }
 
   public initialize(user: UserAccount) {
@@ -416,7 +461,7 @@ class RealtimePeerService {
 
   // Start outgoing call: generates Offer and sends CALL_INVITE with SDP offer
   public async startNativeCall(targetUserId: string, localStream: MediaStream): Promise<void> {
-    const cleanTargetId = targetUserId.toLowerCase().replace(/^whisprr_/, '');
+    const cleanTargetId = targetUserId.toLowerCase().replace(/^whisprr_/, '').trim();
     this.localStream = localStream;
     this.pendingRemoteCandidates = [];
 
@@ -521,8 +566,8 @@ class RealtimePeerService {
 
   // Handle incoming WebRTC signaling packets
   public async handleWebRTCSignal(msg: RealtimeMessage) {
-    const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '');
-    const currentClean = (this.currentUserId || '').toLowerCase().replace(/^whisprr_/, '');
+    const cleanRecipient = (msg.recipientId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+    const currentClean = (this.currentUserId || '').toLowerCase().replace(/^whisprr_/, '').trim();
 
     if (cleanRecipient && cleanRecipient !== currentClean && msg.recipientId !== 'broadcast') {
       return;

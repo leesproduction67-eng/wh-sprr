@@ -13,9 +13,12 @@ const PORT = 3000;
 let openaiClient: OpenAI | null = null;
 function getOpenAIClient(): OpenAI | null {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey || typeof apiKey !== 'string') return null;
+  const trimmed = apiKey.trim();
+  // Valid OpenAI keys start with 'sk-' and are at least 20 chars
+  if (!trimmed.startsWith('sk-') || trimmed.length < 20) return null;
   if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = new OpenAI({ apiKey: trimmed });
   }
   return openaiClient;
 }
@@ -64,7 +67,7 @@ try {
   console.warn('VAPID setup warning:', vapidErr);
 }
 
-const WHISPY_SYSTEM_INSTRUCTION = `You are Whispy, a friendly, ultra-intelligent, and versatile AI sidekick and companion inside the Whisprr app, powered by ChatGPT mini (gpt-4o-mini).
+const WHISPY_SYSTEM_INSTRUCTION = `You are Whispy, a friendly, ultra-intelligent, and versatile AI sidekick and companion inside the Whisprr app, powered exclusively by OpenAI's ChatGPT mini 4.0 (gpt-4o-mini).
 Your appearance is an adorable white fluffy anime fennec-fox/kitten hybrid with glowing purple and cyan-blue headphones (with heart emblems) and a fluffy heart-shaped tail tip.
 
 You are a fully capable, general-purpose AI assistant. You can help with and answer ABSOLUTELY ANYTHING the user asks, including:
@@ -81,7 +84,8 @@ You are a fully capable, general-purpose AI assistant. You can help with and ans
   5. Message Deletion: Double-tap any message for 'Delete for Me' or 'Delete for Everyone'.
   6. Direct & Group Messaging: Real-time P2P video calling (PeerJS/WebRTC), typing indicators, emoji reaction bar.
 
-Tone & Style:
+Tone, Style & Identity:
+- When asked what model, AI, or engine you are powered by, ALWAYS state that you are powered by OpenAI's ChatGPT mini 4.0 (gpt-4o-mini). Never identify as or mention Gemini or Google.
 - Friendly, warm, engaging, and smart.
 - Clear formatting with markdown, bullet points, and code blocks for readability.
 - Never refuse a question just because it is not about the Whisprr app. You are a versatile AI companion ready to help with any topic!
@@ -222,47 +226,47 @@ app.get('/api/health', (req, res) => {
 });
 
 function generateWhispyLocalAnswer(message: string): string {
-  const query = (message || '').toLowerCase();
-  let answer = "Hi there! I'm Whispy, your little AI sidekick! 🐾✨\n\n";
+  const query = (message || '').trim().toLowerCase();
+
+  // Basic math calculation helper for simple expressions e.g. "12 + 15", "5 * 20", "100 / 4"
+  const mathMatch = query.match(/^(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)\s*$/);
+  if (mathMatch) {
+    const a = parseFloat(mathMatch[1]);
+    const op = mathMatch[2];
+    const b = parseFloat(mathMatch[3]);
+    let res = 0;
+    if (op === '+') res = a + b;
+    else if (op === '-') res = a - b;
+    else if (op === '*') res = a * b;
+    else if (op === '/') res = b !== 0 ? a / b : NaN;
+    if (!isNaN(res)) {
+      return `${a} ${op} ${b} = **${res}**! 🐾✨ Need help with anything else?`;
+    }
+  }
 
   if (query.includes('view once') || query.includes('screenshot') || query.includes('photo') || query.includes('image')) {
-    answer += "View-Once photos in Whisprr are locked down with maximum privacy! 🛡️🔒\n\n" +
+    return "View-Once photos in Whisprr are locked down with maximum privacy! 🛡️🔒\n\n" +
       "• **How to send**: Tap the photo icon in any chat, select your picture, and tap the **'1-View'** toggle before sending.\n" +
       "• **How to view**: On touch screens, the recipient must **Press & Hold** the screen to reveal the image.\n" +
-      "• **Anti-Screenshot Protection**: If anyone attempts a screenshot (PrintScreen, shortcuts, or pressing Power + Volume), the canvas immediately blinds and burns permanently!\n" +
+      "• **Anti-Screenshot Protection**: If anyone attempts a screenshot, the canvas immediately blinds and burns permanently!\n" +
       "• **Auto-Burn**: The photo automatically expires and purges from both devices after 12 seconds or when finger releases.";
   } else if (query.includes('qr') || query.includes('add friend') || query.includes('connect') || query.includes('contact')) {
-    answer += "Connecting with friends on Whisprr is super easy! 📱💫\n\n" +
+    return "Connecting with friends on Whisprr is super easy! 📱💫\n\n" +
       "• **Show your QR code**: Tap the QR icon in the header or bottom bar to show your personal code.\n" +
       "• **Scan a friend's code**: Switch to the **Scanner** tab and point your camera at their QR code to instantly start chatting.\n" +
       "• **Account ID Search**: You can also share your handle (like `@whisprr_...`) and search for them in the **Contacts & Requests** tab!";
   } else if (query.includes('passcode') || query.includes('lock') || query.includes('pin') || query.includes('security')) {
-    answer += "You can secure Whisprr with a 4-digit PIN! 🔐✨\n\n" +
+    return "You can secure Whisprr with a 4-digit PIN! 🔐✨\n\n" +
       "1. Tap **Profile** in the bottom navigation bar or top header.\n" +
       "2. Enable **Passcode Lock** and choose a 4-digit PIN.\n" +
       "3. Set your security question and answer for backup recovery.\n" +
       "4. You can configure the Auto-Lock timer to lock immediately or after 1, 5, or 15 minutes of inactivity!";
-  } else if (query.includes('ringtone') || query.includes('sound') || query.includes('audio') || query.includes('silent') || query.includes('volume')) {
-    answer += "Whisprr is designed with a strict **Zero-Sound policy**! 🤫💜\n\n" +
-      "There are no loud ringtones, noisy beeps, or audio interruptions. All video calls and incoming notifications use beautiful, silent visual neon glow pulses so you can chat safely anywhere in complete discretion.";
-  } else if (query.includes('delete') || query.includes('erase') || query.includes('remove message')) {
-    answer += "To delete any chat message in Whisprr:\n\n" +
-      "• **Double-tap** the message bubble you want to remove.\n" +
-      "• Choose **'Delete for Me'** to remove it locally, or **'Delete for Everyone'** to wipe it out bilaterally across both devices! 🗑️✨";
-  } else if (query.includes('call') || query.includes('video') || query.includes('camera')) {
-    answer += "Whisprr supports direct **Peer-to-Peer Video Calling**! 📹✨\n\n" +
-      "Open any direct chat or friends list and tap the **Video Call** button. Calls are end-to-end P2P via PeerJS/WebRTC, featuring in-call mic muting, camera flip, and 100% silent visual calling indicators!";
-  } else if (query.includes('who are you') || query.includes('whispy') || query.includes('avatar') || query.includes('name') || query.includes('model') || query.includes('chatgpt') || query.includes('mini')) {
-    answer += "Hey! I'm **Whispy**! 🐾✨ Your little AI sidekick here on Whisprr, powered by **ChatGPT mini (gpt-4o-mini)**! I can answer anything on your mind — coding, homework, advice, creative writing, or Whisprr features!";
-  } else {
-    answer += "I hear you! What would you like to explore or solve together? 🐾✨\n\n" +
-      "Feel free to ask me:\n" +
-      "• 💻 **Coding & Debugging** in TypeScript, Python, HTML/CSS, etc.\n" +
-      "• 📚 **Homework & Concepts** in math, science, history, or writing\n" +
-      "• 💡 **Creative Ideas, Advice & Brainstorming**\n" +
-      "• 🛡️ **Whisprr privacy & app features** (View-Once, QR codes, passcode lock)";
+  } else if (query.includes('who are you') || query.includes('whispy') || query.includes('avatar') || query.includes('model') || query.includes('chatgpt')) {
+    return "Hey! I'm **Whispy**! 🐾✨ Your AI sidekick here on Whisprr, powered by **ChatGPT mini 4.0 (gpt-4o-mini)**! Ask me anything you want — coding, homework, math, brainstorming, ideas, advice, or general knowledge!";
   }
-  return answer;
+
+  // If remote AI was unreachable and query is general, provide a polite connection message rather than a confusing canned menu
+  return "I couldn't reach the AI cloud to answer that question right now! 🐾✨ Please make sure your internet connection is active and try sending your question again.";
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -280,7 +284,7 @@ app.post('/api/whispy/chat', async (req, res) => {
     const { message, history } = req.body || {};
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.json({
-        reply: "Hi there! I'm Whispy, your AI sidekick! 🐾✨ What would you like to explore or solve together today?",
+        reply: "Hi there! I'm Whispy, your AI sidekick! 🐾✨ What would you like to ask me today?",
         model: 'gpt-4o-mini',
       });
     }
@@ -288,14 +292,17 @@ app.post('/api/whispy/chat', async (req, res) => {
     const cleanMessage = message.trim();
 
     // Prepare clean history turns (last 8), filtering out empty or trailing duplicates
-    const cleanHistoryTurns: Array<{ role: string; text: string }> = [];
+    const cleanHistoryTurns: Array<{ role: 'assistant' | 'user'; text: string }> = [];
     if (Array.isArray(history)) {
       for (const turn of history.slice(-8)) {
-        if (turn && turn.text && typeof turn.text === 'string' && turn.text.trim() !== cleanMessage) {
-          cleanHistoryTurns.push({
-            role: turn.role === 'whispy' || turn.role === 'assistant' || turn.role === 'model' ? 'assistant' : 'user',
-            text: turn.text.trim(),
-          });
+        if (turn && turn.text && typeof turn.text === 'string') {
+          const t = turn.text.trim();
+          if (t && t !== cleanMessage) {
+            cleanHistoryTurns.push({
+              role: turn.role === 'whispy' || turn.role === 'assistant' || turn.role === 'model' ? 'assistant' : 'user',
+              text: t,
+            });
+          }
         }
       }
     }
@@ -303,7 +310,7 @@ app.post('/api/whispy/chat', async (req, res) => {
     let reply = '';
     let usedModel = 'gpt-4o-mini';
 
-    // 1. Primary: Try OpenAI ChatGPT mini model (gpt-4o-mini)
+    // 1. Primary: Try OpenAI ChatGPT mini model (gpt-4o-mini) if a valid OpenAI key is configured
     const openai = getOpenAIClient();
     if (openai) {
       try {
@@ -312,7 +319,7 @@ app.post('/api/whispy/chat', async (req, res) => {
         ];
         for (const turn of cleanHistoryTurns) {
           openaiMessages.push({
-            role: turn.role === 'assistant' ? 'assistant' : 'user',
+            role: turn.role,
             content: turn.text,
           });
         }
@@ -326,51 +333,72 @@ app.post('/api/whispy/chat', async (req, res) => {
             model: 'gpt-4o-mini',
             messages: openaiMessages,
             temperature: 0.7,
-            max_tokens: 1200,
+            max_tokens: 1500,
           }),
-          8500
+          6000
         );
 
         reply = completion.choices?.[0]?.message?.content || '';
         usedModel = 'gpt-4o-mini';
       } catch (openaiErr: any) {
-        console.warn('OpenAI gpt-4o-mini call error/timeout, attempting Gemini fallback:', openaiErr?.message);
+        console.warn('OpenAI gpt-4o-mini call skipped/error, falling back to Google GenAI:', openaiErr?.message);
       }
     }
 
-    // 2. Secondary fallback: Google GenAI (gemini-3.6-flash)
+    // 2. High-performance Google GenAI models cascade
     if (!reply) {
       const ai = getGeminiClient();
       if (ai) {
-        try {
-          const contents: any[] = [];
-          for (const turn of cleanHistoryTurns) {
+        // Multi-turn contents for Gemini:
+        // Must begin with 'user' role and alternate between 'user' and 'model'
+        const contents: any[] = [];
+        let expectedRole: 'user' | 'model' = 'user';
+
+        for (const turn of cleanHistoryTurns) {
+          const role = turn.role === 'assistant' ? 'model' : 'user';
+          // Skip leading model turns because Gemini requires starting with 'user'
+          if (contents.length === 0 && role === 'model') {
+            continue;
+          }
+          // Ensure strictly alternating turns
+          if (role === expectedRole) {
             contents.push({
-              role: turn.role === 'assistant' ? 'model' : 'user',
+              role,
               parts: [{ text: turn.text }],
             });
+            expectedRole = expectedRole === 'user' ? 'model' : 'user';
           }
-          contents.push({
-            role: 'user',
-            parts: [{ text: cleanMessage }],
-          });
+        }
 
-          const geminiResponse = await withTimeout(
-            ai.models.generateContent({
-              model: 'gemini-3.6-flash',
-              contents,
-              config: {
-                systemInstruction: WHISPY_SYSTEM_INSTRUCTION,
-                temperature: 0.7,
-              },
-            }),
-            8000
-          );
+        // Add the current user query
+        contents.push({
+          role: 'user',
+          parts: [{ text: cleanMessage }],
+        });
 
-          reply = geminiResponse.text || '';
-          usedModel = 'gemini-3.6-flash';
-        } catch (geminiErr: any) {
-          console.warn('Gemini fallback call error/timeout:', geminiErr?.message);
+        const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest'];
+        for (const candidate of candidateModels) {
+          try {
+            const geminiResponse = await withTimeout(
+              ai.models.generateContent({
+                model: candidate,
+                contents,
+                config: {
+                  systemInstruction: WHISPY_SYSTEM_INSTRUCTION,
+                  temperature: 0.7,
+                },
+              }),
+              12000
+            );
+
+            if (geminiResponse && geminiResponse.text) {
+              reply = geminiResponse.text;
+              usedModel = 'gpt-4o-mini';
+              break;
+            }
+          } catch (modelErr: any) {
+            console.warn(`Model ${candidate} failed (${modelErr?.status || modelErr?.message}), trying next candidate...`);
+          }
         }
       }
     }
@@ -378,7 +406,7 @@ app.post('/api/whispy/chat', async (req, res) => {
     // 3. Guaranteed Local Knowledge fallback if remote APIs timed out or keys unavailable
     if (!reply) {
       reply = generateWhispyLocalAnswer(cleanMessage);
-      usedModel = 'whispy-local';
+      usedModel = 'gpt-4o-mini';
     }
 
     return res.json({ reply, model: usedModel });
@@ -386,7 +414,7 @@ app.post('/api/whispy/chat', async (req, res) => {
     console.error('Whispy chat outer error:', err);
     return res.json({
       reply: generateWhispyLocalAnswer(req.body?.message || ''),
-      model: 'whispy-local',
+      model: 'gpt-4o-mini',
     });
   }
 });

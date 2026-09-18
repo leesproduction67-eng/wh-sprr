@@ -76,7 +76,28 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
 
   const isGroup = conversation.isGroup;
   const myId = currentUser.id || currentUser.accountId || '';
-  const participants = conversation.participantIds || conversation.participants || [];
+  const myCleanId = (currentUser.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+  const myCleanAcc = (currentUser.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+
+  // Resiliently extract participants from participantIds, participants array, or conversation ID
+  const rawParts = ((conversation.participantIds || conversation.participants || []) as string[]).filter(Boolean);
+  const extractedFromId = conversation.id.startsWith('conv_')
+    ? conversation.id.replace(/^conv_/, '').split('_').filter(Boolean)
+    : [];
+  const allCandidateParts = Array.from(new Set([...rawParts, ...extractedFromId]));
+  const participants = allCandidateParts.map((p) => (p || '').replace(/^whisprr_/, '').trim()).filter(Boolean);
+
+  // Find recipient friend if direct chat
+  const recipientFriend = !isGroup
+    ? friendsList.find((f) => {
+        const fid = (f.id || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        const facc = (f.accountId || '').toLowerCase().replace(/^whisprr_/, '').trim();
+        return participants.some((p) => {
+          const cp = p.toLowerCase();
+          return cp === fid || cp === facc;
+        });
+      }) || friendsList.find((f) => f.displayName === conversation.name)
+    : null;
 
   // Track incoming typing indicator freshness
   useEffect(() => {
@@ -106,11 +127,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
       onTyping?.(false);
     };
   }, []);
-
-  // Find recipient if direct chat
-  const recipientFriend = !isGroup
-    ? friendsList.find((f) => participants.includes(f.id) || participants.includes(f.accountId || ''))
-    : null;
 
   const headerTitle = isGroup
     ? conversation.name || conversation.title || 'Group Chat'
@@ -270,9 +286,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({
           {!isGroup && (
             <button
               onClick={() => {
-                const targetPeer = participants.find(
-                  (p) => p.toLowerCase() !== myId.toLowerCase()
-                ) || recipientFriend?.id;
+                const targetPeer =
+                  participants.find((p) => {
+                    const cp = p.toLowerCase();
+                    return cp !== myCleanId && cp !== myCleanAcc;
+                  }) ||
+                  recipientFriend?.id ||
+                  recipientFriend?.accountId;
                 if (targetPeer) {
                   onStartVideoCall(targetPeer, headerTitle);
                 }
