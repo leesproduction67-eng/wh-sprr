@@ -205,7 +205,7 @@ export const WhispyModal: React.FC<WhispyModalProps> = ({
                     Whispy
                     <Sparkles className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-[#ffffff] border border-[#bf2a00]">
                     ChatGPT mini 4.0
                   </span>
                 </div>
